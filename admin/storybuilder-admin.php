@@ -5,7 +5,7 @@
  */
 
 // Ensure we're being called from WordPress
-defined( 'ABSPATH' ) or die();
+defined( 'ABSPATH' ) or die;
 
 /* Enqueue the functions for the box */
 add_action( 'add_meta_boxes', 'add_custom_box_wpse_14445' );
@@ -58,6 +58,10 @@ function save_postdata_wpse_14445( $post_id, $post_object ) {
 	get_currentuserinfo();
 
 	$update_return = update_post_meta( $post_id, 'story_shortname', $mydata );
+
+	/* Now that the post has been successfully saved, let's update the cache with the most current post results */
+	$story = storybuilder_do_cache( $mydata );
+	set_transient( 'storybldr_' . $mydata, $story );
 }
 
 /*

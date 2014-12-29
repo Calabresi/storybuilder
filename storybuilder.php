@@ -11,17 +11,13 @@ Description: StoryBuilder
 *
 * LIST OF TODOS:
 *
-* Caching!
 * Add option to disable CSS
 * Add option to edit CSS
-* Documentation!
-* Which license to use
-* Other plugin best practices (see https://developer.wordpress.org/plugins/the-basics/best-practices/)
 *
 ****/
 
 // Ensure we're being called from WordPress
-defined( 'ABSPATH' ) or die();
+defined( 'ABSPATH' ) or die;
 
 // Register style sheet
 add_action( 'wp_enqueue_scripts', 'register_plugin_styles' );
@@ -30,20 +26,28 @@ add_action( 'wp_enqueue_scripts', 'register_plugin_styles' );
 add_shortcode( 'storyname', 'storyname_handler' );
 add_shortcode( 'storyname_related', 'storyname_related_handler' );
 
+/* Load common functions. */
+require_once( dirname(__FILE__) . '/common/include.php');
+
 /* Load admin stuff if we are in admin mode */
 if ( is_admin ) {
-	require_once( dirname(__FILE__) . 	'/admin/storybuilder-admin.php' );
+	require_once( dirname(__FILE__) . '/admin/storybuilder-admin.php' );
+	require_once( dirname(__FILE__) . '/admin/storybuilder-style-admin.php' );
 }
 
 /**
  * Register style sheet.
  */
 function register_plugin_styles() {
-	wp_register_style( 'storybuilder', plugins_url( 'storybuilder/css/storybuilder.css' ) );
+	// Check if the custom stylesheet exists. If it does, load it.
+	if ( file_exists( dirname(__FILE__) . '/css/storybuilder-custom.css' ) ) {
+		wp_register_style( 'storybuilder', plugins_url( 'storybuilder/css/storybuilder-custom.css' ) );
+	} else {
+		// Otherwise, load the default stylesheet.
+		wp_register_style( 'storybuilder', plugins_url( 'storybuilder/css/storybuilder.css' ) );
+	}
 	wp_enqueue_style( 'storybuilder' );
 }
-
-
 
 /* Shortcode handlers */
 // [storyname shortname="value"]
@@ -53,17 +57,19 @@ function storyname_handler( $atts ) {
 		'shortname' => '',
 		), $atts );
 	if ( $a['shortname'] != '' ) { // don't run this if there was no shortname specified
-		$args = array( 'meta_key' => 'story_shortname',
-					   'meta_value' => $a['shortname'] );
-		$the_query = new WP_Query( $args );
+		// Check for transient. If none, then execute WP_Query
+		if ( false == ( $story = get_transient( 'storybldr_' . $a['shortname'] ) ) ) {
+			$story = storybuilder_do_cache( $a['shortname'] );
+			set_transient( 'storybldr_' . $a['shortname'], $story );
+		}
 	} else {
-		$the_query = NULL;
+		$story = NULL;
 	}
 	$return_block = '';
-	if ( $the_query->have_posts() ) {
+	if ( $story->have_posts() ) {
 		$return_block .= '<ul class="storylist storylist_' . $a['shortname'] . '" id="id_storylist_' . $a['shortname'] . '">';
-		while ( $the_query->have_posts() ) {
-			$the_query->the_post();
+		while ( $story->have_posts() ) {
+			$story->the_post();
 			$return_block .= '<li class="storylist-story"><div class="storylist-story-title"><a class="storylist-permalink" href="' . get_permalink() . '">' . get_the_title() . '</a></div>';
 			$return_block .= '<div class="storylist-excerpt">' . get_the_excerpt() . '</div>';
 			$return_block .= '</li>';
@@ -81,18 +87,20 @@ function storyname_related_handler( $atts ) {
 	$a = shortcode_atts( array(
 		'shortname' => '',
 		), $atts );
-	if ( $a['shortname'] != '' ) {
-	$args = array( 'meta_key' => 'story_shortname',
-				   'meta_value' => $a['shortname'] );
-		$the_query = new WP_Query( $args );
+	if ( $a['shortname'] != '' ) { // don't run this if there was no shortname specified
+		// Check for transient. If none, then execute WP_Query
+		if ( false === ( $story = get_transient( 'storybldr_' . $a['shortname'] ) ) ) {
+			$story = storybuilder_do_cache( $a['shortname'] );
+			set_transient( 'storybldr_' . $a['shortname'], $story );
+		}
 	} else {
-		$the_query = NULL;
+		$story = NULL;
 	}
 	$return_block = '';
-	if ( $the_query->have_posts() ) {
+	if ( $story->have_posts() ) {
 		$return_block .= '<ul class="storylist storylist_' . $a['shortname'] . '" id="id_storylist_' . $a['shortname'] . '">';
-		while ( $the_query->have_posts() ) {
-			$the_query->the_post();
+		while ( $story->have_posts() ) {
+			$story->the_post();
 			if ( $cur_postid != get_the_ID() ) {
 				$return_block .= '<li class="storylist-story"><div class="storylist-story-title"><a class="storylist-permalink" href="' . get_permalink() . '">' . get_the_title() . '</a></div>';
 				$return_block .= '</li>';
@@ -101,4 +109,5 @@ function storyname_related_handler( $atts ) {
 		$return_block .= '</ul>';
 		wp_reset_postdata();
 	}
-	return $return_block;}
+	return $return_block;
+}
